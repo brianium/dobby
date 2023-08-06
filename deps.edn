@@ -1,0 +1,10 @@
+{:paths   ["src" "resources"]
+ :deps    {camel-snake-kebab/camel-snake-kebab {:mvn/version "0.4.3"}
+           cheshire/cheshire                   {:mvn/version "5.11.0"}
+           org.clojure/tools.logging           {:mvn/version "1.2.4"}
+           dev.weavejester/medley              {:mvn/version "1.7.0"}
+           http-kit/http-kit                   {:mvn/version "2.7.0"}
+           metosin/malli                       {:mvn/version "0.9.2"}
+           org.clojure/core.async              {:mvn/version "1.6.673"}}
+ :aliases {:dev {:extra-paths ["dev"]
+                 :extra-deps  {org.clojure/clojure {:mvn/version "1.11.1"}}}}}

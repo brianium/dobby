@@ -1,0 +1,4 @@
+{:hooks {:analyze-call {dobby.core/defunction clj-kondo.dobby/defunction-hook}} 
+ 
+ :lint-as
+ {dobby.core/defagent clojure.core/defn}}
