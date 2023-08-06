@@ -1,6 +1,16 @@
 (ns dobby.core
   (:require [dobby.impl.agent :as agent]))
 
+(defn add-state-watch
+  "Add a function that gets called whenever the agent's internal state
+   changes. The given function will be called with the old value and new value.
+   Possible values are:
+   :inert - The agent is not doing anything
+   :waiting - The agent is waiting to respond
+   :responding - The agent is currently responding to a message"
+  [agent fn-2]
+  (agent/add-state-watch agent fn-2))
+
 (defn context
   "Get the agent's current context. An agent's log can not be accessed
    until it is started"
@@ -48,6 +58,11 @@
    (agent/start-agent! agent log))
   ([agent]
    (agent/start-agent! agent)))
+
+(defn state
+  "Get the current state of the agent"
+  [agent]
+  (agent/state agent))
 
 (defn stream-chat
   "Stream chat text from an agent. Calls the given function everytime a chunk of

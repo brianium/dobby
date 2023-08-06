@@ -15,15 +15,20 @@
              :input          input
              :output         output
              :on-message     on-message
-             :state          :inert} dependencies)))
+             :state          (atom :inert)} dependencies)))
   ([initial-prompt on-message]
    (create-agent initial-prompt on-message {})))
+
+(defn- update-state!
+  [agent state]
+  (update agent :state reset! state))
 
 (defn stop-agent!
   [agent]
   (let [channels [:input :output]]
     (doseq [chan channels]
-      (async/close! (get agent chan)))))
+      (async/close! (get agent chan))))
+  (update-state! agent :inert))
 
 (defn- agent-functions
   [fns]
@@ -37,25 +42,35 @@
   (-> params
       (update-existing :functions agent-functions)))
 
+(defn- stream
+  [context agent]
+  (let [start-stream #(gpt/stream context %)]
+    (-> (update-state! agent :responding)
+        (:params)
+        (agent-params)
+        (start-stream))))
+
 (defn start-agent!
   ([agent log]
-   (let [{:keys [input output on-message initial-prompt params]} agent
-         broadcast                                               (fn [message]
-                                                                   (on-message agent message)
-                                                                   message)]
+   (let [{:keys [input output on-message initial-prompt]} agent
+         broadcast                                        (fn [message]
+                                                            (-> agent 
+                                                                (update-state! :waiting)
+                                                                (on-message message))
+                                                            message)]
      (async/go-loop [ctx (log/init! log initial-prompt)]
        (when-some [message (async/<! input)]
          (let [update-log! (partial log/append! log message)]
            (-> (conj ctx message)
-               (gpt/stream (agent-params params))
+               (stream agent)
                (gpt/transpose output)
                (broadcast)
                (update-existing-in [:function_call :arguments] json-encode)
                (update-log!)
-               (recur))))))
-   (-> agent
-       (assoc :log log :state :active)
-       (dissoc :initial-prompt)))
+               (recur)))))
+     (-> agent
+         (assoc :log log)
+         (update-state! :waiting))))
   ([agent]
    (start-agent! agent (log/create-atom-log))))
 
@@ -104,6 +119,17 @@
       (when-some [text (async/<! output)]
         (fn-1 text)
         (recur)))))
+
+(defn add-state-watch
+  [agent fn-2]
+  (let [{:keys [state]} agent]
+    (add-watch state :state-change (fn [_ _ old new]
+                                     (fn-2 old new)))))
+
+(defn state
+  [agent]
+  (let [{:keys [state]} agent]
+    @state))
 
 (defmacro defunction
   [name description schema args & body]
