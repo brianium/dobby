@@ -3,13 +3,13 @@
 
 (defn add-state-watch
   "Add a function that gets called whenever the agent's internal state
-   changes. The given function will be called with the old value and new value.
+   changes. The given function will be called with the agent, old value and new value.
    Possible values are:
    :inert - The agent is not doing anything
    :waiting - The agent is waiting to respond
    :responding - The agent is currently responding to a message"
-  [agent fn-2]
-  (agent/add-state-watch agent fn-2))
+  [agent id fn-3]
+  (agent/add-state-watch agent id fn-3))
 
 (defn context
   "Get the agent's current context. An agent's log can not be accessed
@@ -40,6 +40,11 @@
    (agent/invoke agent args func name))
   ([agent args func]
    (agent/invoke agent args func)))
+
+(defn remove-state-watch
+  "Remove a state watch identified by the given id from an agent"
+  [agent id]
+  (agent/remove-state-watch agent id))
 
 (defn send-message
   "Send a message to an agent"

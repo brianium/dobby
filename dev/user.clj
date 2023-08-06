@@ -15,9 +15,10 @@
   [agent message]
   (dispatch agent message))
 
-(add-state-watch weather-guy (fn [old new]
-                               (println (str "State was " old))
-                               (println (str "State is now " new))))
+(add-state-watch weather-guy :log (fn [agent old new]
+                                    (println (:initial-prompt agent))
+                                    (println (str "State was " old))
+                                    (println (str "State is now " new))))
 
 #_(def started-weather-guy 
     (let [started (start-agent! weather-guy)] 

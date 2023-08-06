@@ -21,7 +21,9 @@
 
 (defn- update-state!
   [agent state]
-  (update agent :state reset! state))
+  (let [state-atom (:state agent)]
+    (reset! state-atom state)
+    agent))
 
 (defn stop-agent!
   [agent]
@@ -121,10 +123,14 @@
         (recur)))))
 
 (defn add-state-watch
-  [agent fn-2]
+  [agent id fn-3]
   (let [{:keys [state]} agent]
-    (add-watch state :state-change (fn [_ _ old new]
-                                     (fn-2 old new)))))
+    (add-watch state id (fn [_ _ old new]
+                          (fn-3 agent old new)))))
+
+(defn remove-state-watch
+  [agent id]
+  (remove-watch (:state agent) id))
 
 (defn state
   [agent]
