@@ -9,26 +9,26 @@
   [_ {:keys [location unit]}]
   {:temperature 22 :unit "celsius" :description "Sunny"})
 
-(defagent weather-guy
+(defagent weather-assistant
   "You are a helpful weather bot that delivers useful weather information"
   {:functions [get-current-weather]}
   [agent message]
   (dispatch agent message))
 
-(add-state-watch weather-guy :log (fn [agent old new]
+(add-state-watch weather-assistant :log (fn [agent old new]
                                     (println (:initial-prompt agent))
                                     (println (str "State was " old))
                                     (println (str "State is now " new))))
 
-#_(def started-weather-guy 
-    (let [started (start-agent! weather-guy)] 
-      (stream-chat weather-guy #(println %))
-      (send-text weather-guy "What is the weather like in Boston?")
+#_(def started-weather-assistant 
+    (let [started (start-agent! weather-assistant)] 
+      (stream-chat weather-assistant #(println %))
+      (send-text weather-assistant "What is the weather like in Boston?")
       started))
 
-#_(send-text weather-guy "Seems a little cold no?")
+#_(send-text weather-assistant "Seems a little cold no?")
 
-#_(context started-weather-guy)
+#_(context started-weather-assistant)
 
-#_(stop-agent! started-weather-guy)
+#_(stop-agent! started-weather-assistant)
 
