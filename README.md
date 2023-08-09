@@ -2,7 +2,7 @@
 
 > Dobby is free!
 
-[![Clojars Project](https://img.shields.io/clojars/v/com.github.brianium/dobby.svg)]
+[![Clojars Project](https://img.shields.io/clojars/v/com.github.brianium/dobby.svg)](https://clojars.org/com.github.brianium/dobby)
 
 ## Table of contents
 - [Usage](#usage)
