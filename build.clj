@@ -25,7 +25,7 @@
                       :connection          "scm:git:git://github.com/brianium/dobby.git"
                       :developerConnection "scm:git:git://github.com/brianium/dobby.git"
                       :tag                 "HEAD"}})
-  (b/copy-dir {:src-dirs ["src"]
+  (b/copy-dir {:src-dirs ["src" "resources"]
                :target-dir class-dir})
   (b/jar {:class-dir class-dir
           :jar-file jar-file}))
