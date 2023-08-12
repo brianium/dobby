@@ -2,16 +2,6 @@
   (:require [dobby.impl.agent :as agent]
             [dobby.impl.log :as log]))
 
-(defn add-state-watch
-  "Add a function that gets called whenever the agent's internal state
-   changes. The given function will be called with the agent, old value and new value.
-   Possible values are:
-   :inert - The agent is not doing anything
-   :waiting - The agent is waiting to respond
-   :responding - The agent is currently responding to a message"
-  [agent id fn-3]
-  (agent/add-state-watch agent id fn-3))
-
 (defn close!
   "Shut the agent down completely. Cannot be restarted. Closes the log according
    to dobby.impl.log/close!"
@@ -53,11 +43,6 @@
   ([agent args func]
    (agent/invoke agent args func)))
 
-(defn remove-state-watch
-  "Remove a state watch identified by the given id from an agent"
-  [agent id]
-  (agent/remove-state-watch agent id))
-
 (defn send-message
   "Send a message to an agent"
   [agent message]
@@ -74,14 +59,17 @@
   [agent log]
   (agent/start-agent! agent log))
 
-(defn state
-  "Get the current state of the agent"
-  [agent]
-  (agent/state agent))
-
 (defn stream-chat
   "Stream chat text from an agent. Calls the given function everytime a chunk of
-   non function output is received. The function will be called with chunks of text as they become available.
+   non function output is received. The function will be called with events as they become available.
+
+   Events are maps of the form {:type <type> :content <content>}
+
+   Types are as follows:
+   - :begin - Represents that a response has started. :content will be nil
+   - :text - Represents that text is available, :content will be a string containing the portion of the response
+   - :end - Represnts that the response has ended. :content will be nil
+
    Useful for realtime responses"
   [agent fn-1]
   (agent/stream-chat agent fn-1))

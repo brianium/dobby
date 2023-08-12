@@ -1,5 +1,5 @@
 (ns user
-  (:require [dobby.core :refer [defagent defunction dispatch add-state-watch stream-chat start-agent! send-text context stop-agent! create-log close!]]))
+  (:require [dobby.core :refer [defagent defunction dispatch stream-chat start-agent! send-text context stop-agent! create-log close!]]))
 
 (defunction get-current-weather
   "Get the current weather in a given location"
@@ -15,20 +15,23 @@
   [agent message]
   (dispatch agent message))
 
-(add-state-watch weather-assistant :log (fn [agent old new]
-                                    (println (:initial-prompt agent))
-                                    (println (str "State was " old))
-                                    (println (str "State is now " new))))
-
 (def log (create-log))
+
+(defn handle-output
+  [event]
+  (let [{:keys [type content]} event]
+    (case type
+      :begin  (println "Beginning response")
+      :end    (println "Response finished")
+      (print content))))
 
 #_(def started-weather-assistant 
     (let [started (start-agent! weather-assistant log)] 
-      (stream-chat weather-assistant #(println %))
+      (stream-chat weather-assistant handle-output)
       (send-text weather-assistant "What is the weather like in Boston?")
       started))
 
-#_(send-text weather-assistant "That is a good idea. Thank you.")
+#_(send-text weather-assistant "What clothing should I wear?")
 
 #_(context started-weather-assistant)
 

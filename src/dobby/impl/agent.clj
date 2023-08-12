@@ -17,20 +17,13 @@
       :initial-prompt initial-prompt
       :input          input
       :output         output
-      :on-message     on-message
-      :state          (atom :inert)})))
-
-(defn- update-state!
-  [agent state]
-  (let [state-atom (:state agent)]
-    (reset! state-atom state)
-    agent))
+      :on-message     on-message})))
 
 (defn stop-agent!
   [agent]
   (let [stop (:stop agent)]
     (async/put! stop :stopped))
-  (update-state! agent :inert))
+  agent)
 
 (defn close!
   [agent]
@@ -53,10 +46,15 @@
   (-> params
       (update-existing :functions agent-functions)))
 
+(defn- write-output
+  [agent payload]
+  (async/put! (:output agent) payload)
+  agent)
+
 (defn- stream
   [context agent]
   (let [start-stream #(gpt/stream context %)]
-    (-> (update-state! agent :responding)
+    (-> (write-output agent {:type :begin :content nil})
         (:params)
         (agent-params)
         (start-stream))))
@@ -66,7 +64,7 @@
   (let [{:keys [stop input output on-message initial-prompt]} agent
         broadcast                                              (fn [message]
                                                                  (-> agent 
-                                                                     (update-state! :waiting)
+                                                                     (write-output {:type :end :content nil})
                                                                      (on-message message))
                                                                  message)]
     (async/go-loop [ctx (log/init! log initial-prompt)]
@@ -83,8 +81,7 @@
                 (update-log!)
                 (recur))))))
     (-> agent
-        (assoc :log log)
-        (update-state! :waiting))))
+        (assoc :log log))))
 
 (defn context
   [agent]
@@ -128,24 +125,9 @@
   [agent fn-1]
   (let [output (:output agent)]
     (async/go-loop []
-      (when-some [text (async/<! output)]
-        (fn-1 text)
+      (when-some [event (async/<! output)]
+        (fn-1 event)
         (recur)))))
-
-(defn add-state-watch
-  [agent id fn-3]
-  (let [{:keys [state]} agent]
-    (add-watch state id (fn [_ _ old new]
-                          (fn-3 agent old new)))))
-
-(defn remove-state-watch
-  [agent id]
-  (remove-watch (:state agent) id))
-
-(defn state
-  [agent]
-  (let [{:keys [state]} agent]
-    @state))
 
 (defmacro defunction
   [name description schema args & body]

@@ -112,13 +112,15 @@
     message))
 
 (defn transpose
-  "Consume a stream. Writes incremental output to the given core async channel.
+  "Consume a stream. Writes incremental output to the given core async channel. The output
+   channel will receive payloads of the format {:type :text :content <string>}
+   
    Returns a map with the final response to be added to context"
   [stream output]
   (async/<!! (async/go-loop [message {}]
                (if-some [delta (async/<! stream)]
                  (do
                    (when-some [content (:content delta)] ;;; We only stream content to the output channel
-                     (async/put! output content))
+                     (async/put! output {:type :text :content content}))
                    (recur (apply-delta message delta)))
                  (parse-message message)))))

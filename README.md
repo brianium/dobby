@@ -9,7 +9,6 @@
     - [Config](#config)
 - [Agents](#agents)
     - [Communicating with agents](#communicating-with-agents)
-    - [Agent state](#agent-state)
 - [Functions](#functions)
 - [Logs](#logs)
 
@@ -44,7 +43,17 @@
 
 ;;; Stream responses as they become available
 
-(dobby/stream-chat agent #(println %))
+(defn handle-output
+  "Events will have a type key and content key. Type is :begin, :end, or :text. :content will be nil
+  if the type is :begin or :end."
+  [event]
+  (let [{:keys [type content]} event]
+    (case type
+      :begin  (println "Beginning response")
+      :end    (println "Response finished")
+      (print content))))
+
+(dobby/stream-chat agent handle-output)
 
 ;;; Send a simple message to the agent
 
@@ -134,21 +143,6 @@ Note: If you do this, take care not to override the following reserved keys:
 ;;; Send a text message as a user role
 ;;; Short hand for the above send-message call
 (send-text agent "What is the weater like in Boston?")
-```
-
-#### Agent state
-
-```clojure
-(require '[dobby.core :refer [state add-state-watch]])
-
-;;; Get the current state of an agent
-(state agent) ;;; :inert, :waiting, or :responding
-
-;;; Call a function when the state changes
-(add-state-watch
-  agent
-  (fn [agent old new]
-    (println "Agent state changed from " old " to " new)))
 ```
 
 ### Functions
