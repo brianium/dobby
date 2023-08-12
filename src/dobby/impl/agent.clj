@@ -1,6 +1,7 @@
 (ns dobby.impl.agent
   (:require [camel-snake-kebab.core :as csk]
             [clojure.core.async :as async]
+            [clojure.tools.logging :refer [info]]
             [malli.json-schema :as json-schema]
             [medley.core :refer [find-first update-existing update-existing-in]]
             [dobby.impl.log :as log]
@@ -8,16 +9,16 @@
             [dobby.impl.json :refer [json-encode]]))
 
 (defn create-agent
-  ([initial-prompt on-message dependencies]
-   (let [input  (async/chan)
-         output (async/chan)]
-     (merge {:initial-prompt initial-prompt
-             :input          input
-             :output         output
-             :on-message     on-message
-             :state          (atom :inert)} dependencies)))
   ([initial-prompt on-message]
-   (create-agent initial-prompt on-message {})))
+   (let [input  (async/chan)
+         output (async/chan)
+         stop   (async/chan)]
+     {:stop           stop
+      :initial-prompt initial-prompt
+      :input          input
+      :output         output
+      :on-message     on-message
+      :state          (atom :inert)})))
 
 (defn- update-state!
   [agent state]
@@ -27,10 +28,18 @@
 
 (defn stop-agent!
   [agent]
-  (let [channels [:input :output]]
-    (doseq [chan channels]
-      (async/close! (get agent chan))))
+  (let [stop (:stop agent)]
+    (async/put! stop :stopped))
   (update-state! agent :inert))
+
+(defn close!
+  [agent]
+  (let [channels [:input :output :stop]]
+    (stop-agent! agent)
+    (doseq [channel channels]
+      (async/close! (get agent channel)))
+    (when-some [log (:log agent)]
+      (log/close! log))))
 
 (defn- agent-functions
   [fns]
@@ -53,28 +62,29 @@
         (start-stream))))
 
 (defn start-agent!
-  ([agent log]
-   (let [{:keys [input output on-message initial-prompt]} agent
-         broadcast                                        (fn [message]
-                                                            (-> agent 
-                                                                (update-state! :waiting)
-                                                                (on-message message))
-                                                            message)]
-     (async/go-loop [ctx (log/init! log initial-prompt)]
-       (when-some [message (async/<! input)]
-         (let [update-log! (partial log/append! log message)]
-           (-> (conj ctx message)
-               (stream agent)
-               (gpt/transpose output)
-               (broadcast)
-               (update-existing-in [:function_call :arguments] json-encode)
-               (update-log!)
-               (recur)))))
-     (-> agent
-         (assoc :log log)
-         (update-state! :waiting))))
-  ([agent]
-   (start-agent! agent (log/create-atom-log))))
+  [agent log]
+  (let [{:keys [stop input output on-message initial-prompt]} agent
+        broadcast                                              (fn [message]
+                                                                 (-> agent 
+                                                                     (update-state! :waiting)
+                                                                     (on-message message))
+                                                                 message)]
+    (async/go-loop [ctx (log/init! log initial-prompt)]
+      (when-some [[message port] (async/alts! [stop input])]
+        (cond
+          (= port stop) (info "Agent stopped")
+          :else
+          (let [update-log! (partial log/append! log message)]
+            (-> (conj ctx message)
+                (stream agent)
+                (gpt/transpose output)
+                (broadcast)
+                (update-existing-in [:function_call :arguments] json-encode)
+                (update-log!)
+                (recur))))))
+    (-> agent
+        (assoc :log log)
+        (update-state! :waiting))))
 
 (defn context
   [agent]

@@ -38,7 +38,9 @@
 
 ;;; Start the agent with a fresh context log
 
-(def agent (dobby/start-agent! weather-assistant))
+(def log (dobby/create-log)) ;; Use an atom backed log
+
+(def agent (dobby/start-agent! weather-assistant log))
 
 ;;; Stream responses as they become available
 
@@ -54,7 +56,11 @@
 
 ;;; Stop the agent
 
-(dobby/stop-agent! agent)
+(dobby/stop-agent! agent) ;;; An agent stopped this way can be started again with start-agent!
+
+;;; Close the agent
+
+(dobby/close! agent) ;;; An agent closed this way cannot be started again, and the log will be closed as well
 
 ```
 
@@ -195,6 +201,6 @@ Functions are executed within the body of an agent by calling the `dispatch` or 
 
 ### Logs
 
-The log is what tracks the context used by the agent. It backs the "chat loop". A log can be given as the second argument to `start-agent!`, but if none is given, a simple log powered by a Clojure atom will be used.
+The log is what tracks the context used by the agent. It backs the "chat loop". A log must be given as the second argument to `start-agent!`. A default atom backed log can be created using `dobby.core/create-log`
 
 A custom log can be implemented by defining an implementation of the `dobby.impl.log/Log` protocol.

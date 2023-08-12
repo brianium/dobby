@@ -1,5 +1,6 @@
 (ns dobby.core
-  (:require [dobby.impl.agent :as agent]))
+  (:require [dobby.impl.agent :as agent]
+            [dobby.impl.log :as log]))
 
 (defn add-state-watch
   "Add a function that gets called whenever the agent's internal state
@@ -11,6 +12,12 @@
   [agent id fn-3]
   (agent/add-state-watch agent id fn-3))
 
+(defn close!
+  "Shut the agent down completely. Cannot be restarted. Closes the log according
+   to dobby.impl.log/close!"
+  [agent]
+  (agent/close! agent))
+
 (defn context
   "Get the agent's current context. An agent's log can not be accessed
    until it is started"
@@ -19,12 +26,17 @@
 
 (defn create-agent
   "Create a new agent. The on-message function is called with the agent and a complete message
-   after a stream is fully consumed. An optional dependencies map can be provided so dependencies
-   can be accessed when invoking functions"
-  ([initial-prompt on-message dependencies]
-   (agent/create-agent initial-prompt on-message dependencies))
-  ([initial-prompt on-message]
-   (agent/create-agent initial-prompt on-message)))
+   after a stream is fully consumed."
+  [initial-prompt on-message]
+  (agent/create-agent initial-prompt on-message))
+
+(defn create-log
+  "A default log implementation backed by an atom. Custom logs can be created
+   by implementing the dobby.impl.log/Log protocol.
+   
+   See dobby.impl.log/create-atom-log for implentation details"
+  []
+  (log/create-atom-log))
 
 (defn dispatch
   "Invoke a function if the message indicates one should be called. Only supports
@@ -59,10 +71,8 @@
 (defn start-agent!
   "Start an agent. The given log will be used to store context. Give a log
    with pre-seeded data to start the agent with prior knowledge."
-  ([agent log]
-   (agent/start-agent! agent log))
-  ([agent]
-   (agent/start-agent! agent)))
+  [agent log]
+  (agent/start-agent! agent log))
 
 (defn state
   "Get the current state of the agent"
@@ -77,7 +87,7 @@
   (agent/stream-chat agent fn-1))
 
 (defn stop-agent!
-  "Stop an agent. Closes input and output channels"
+  "Stop an agent. Messages will no longer be handled, but the agent can be restarted"
   [agent]
   (agent/stop-agent! agent))
 

@@ -3,7 +3,8 @@
 (defprotocol Log
   (-append! [self message])
   (-context [self])
-  (-init! [self initial-prompt]))
+  (-init! [self initial-prompt])
+  (-close! [self]))
 
 (deftype AtomLog [*atom]
   Log
@@ -12,7 +13,12 @@
   (-context [_]
     @*atom)
   (-init! [_ initial-prompt]
-    (reset! *atom [{:role "system" :content initial-prompt}])))
+    (let [current @*atom]
+      (if (empty? current)
+        (reset! *atom [{:role "system" :content initial-prompt}])
+        current)))
+  (-close! [_]
+    (reset! *atom [])))
 
 (defn create-atom-log
   "A simple log backed by an atom"
@@ -37,3 +43,8 @@
   [log initial-prompt]
   (-init! log initial-prompt)
   (context log))
+
+(defn close!
+  "Perform any cleanup on the log if necessary"
+  [log]
+  (-close! log))
