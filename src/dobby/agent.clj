@@ -136,8 +136,6 @@
         attr-map   (if attr-map? (first rest) nil)
         args       (vec (if attr-map? (second rest) (first rest)))
         body       (if attr-map? (drop 2 rest) (drop 1 rest))]
-    ;; For this example, we simply ignore the attr-map.
-    ;; But you can use it as you deem appropriate in your application.
     `(defn ~name
        ([id# log# model#]
         (start!
