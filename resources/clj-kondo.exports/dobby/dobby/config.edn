@@ -1,8 +1,6 @@
 {:hooks {:analyze-call {dobby.agent/defunction clj-kondo.dobby/defunction-hook
                         dobby.core/defunction  clj-kondo.dobby/defunction-hook
                         dobby.agent/stream     clj-kondo.dobby/stream-hook
-                        dobby.core/stream      clj-kondo.dobby/stream-hook}} 
- 
- :lint-as
- {dobby.agent/defagent clojure.core/defn
-  dobby.core/defagent  clojure.core/defn}}
+                        dobby.core/stream      clj-kondo.dobby/stream-hook
+                        dobby.agent/defagent   clj-kondo.dobby/defagent-hook
+                        dobby.core/defagent    clj-kondo.dobby/defagent-hook}} }
