@@ -19,18 +19,20 @@
   [agent message]
   (println message))
 
-(defn start-stream!
-  [started-agent]
-  (stream started-agent
-    [event]
-    (println event)))
+(defn start!
+  ([id log model]
+   (let [started (weather-assistant id log model)]
+     (stream started
+       [event]
+       (println event))))
+  ([log model]
+   (start! (random-uuid) log model)))
 
 (def system-config
   {:components
    {:log   {:start `(agent/create-log)}
     :model {:start `(agent/create-model {:model "gpt-3.5-turbo"})}
-    :agent {:start `(start-stream!
-                     (weather-assistant (clip/ref :log) (clip/ref :model)))
+    :agent {:start `(start! (clip/ref :log) (clip/ref :model))
             :stop  'agent/stop!}}})
 
 (set-init! (constantly system-config))
