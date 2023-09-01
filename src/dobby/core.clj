@@ -1,68 +1,104 @@
 (ns dobby.core
-  (:require [dobby.impl.agent :as agent]
-            [dobby.impl.log :as log]))
-
-(defn close!
-  "Shut the agent down completely. Cannot be restarted. Closes the log according
-   to dobby.impl.log/close!"
-  [agent]
-  (agent/close! agent))
-
-(defn context
-  "Get the agent's current context. An agent's log can not be accessed
-   until it is started"
-  [agent]
-  (agent/context agent))
-
-(defn create-agent
-  "Create a new agent. The on-message function is called with the agent and a complete message
-   after a stream is fully consumed."
-  [initial-prompt on-message]
-  (agent/create-agent initial-prompt on-message))
+  (:require [dobby.agent :as agent]
+            [dobby.log :as log]
+            [dobby.model :as model]))
 
 (defn create-log
-  "A default log implementation backed by an atom. Custom logs can be created
-   by implementing the dobby.impl.log/Log protocol.
-   
-   See dobby.impl.log/create-atom-log for implentation details"
+  "Returns a new log backed by an atom. For more complex scenarios, create
+   an implementation of the dobby.impl.log/Log protocol"
   []
-  (log/create-atom-log))
+  (log/create-log))
 
-(defn dispatch
-  "Invoke a function if the message indicates one should be called. Only supports
-   functions defined with defunction"
-  [agent message]
-  (agent/dispatch agent message))
+(defn create-model
+  "Create a model backed by OpenAI's API. Params are essentially anthing supported
+   by the OpenAI API. See https://platform.openai.com/docs/guides/gpt"
+  [params]
+  (model/create-model params))
 
-(defn invoke
-  "Invoke a function and send the result to the agent as a message. If not calling
-   a function defined by defunction, you must provide a name. Functions are invoked
-   with the agent and the arguments given"
-  ([agent args func name]
-   (agent/invoke agent args func name))
-  ([agent args func]
-   (agent/invoke agent args func)))
+(defn define-agent
+  "Defines a prototype for starting agents with. This function is the backing function
+   for the defagent macro. It is provided as an alternative to defagent, and is useful
+   for scenarios where you want to create an agent without defining a new symbol."
+  [initial-prompt on-message functions]
+  (agent/define-agent initial-prompt on-message functions))
 
-(defn send-message
-  "Send a message to an agent"
-  [agent message]
-  (agent/send-message agent message))
+(defn define-function
+  "This function is the backing function for the defunction macro. It is provided as an
+   alternative to defunction, and is useful for scenarios where you want to create a function
+   without defining a new symbol."
+  [schema-name description schema fn-2]
+  (agent/define-function schema-name description schema fn-2))
 
-(defn send-text
-  "Sent a text message to an agent. Will send it via the user role"
-  [agent text]
-  (agent/send-text agent text))
+(defn get-context
+  "Return the current context of the agent"
+  [started-agent]
+  (agent/get-context started-agent))
 
-(defn start-agent!
-  "Start an agent. The given log will be used to store context. Give a log
-   with pre-seeded data to start the agent with prior knowledge."
-  [agent log]
-  (agent/start-agent! agent log))
+(defn send-message!
+  "Send a message to the agent. For now the message format should mirro what the OpenAI
+   API expects. See https://platform.openai.com/docs/api-reference/chat/create"
+  [started-agent message]
+  (agent/send-message! started-agent message))
 
-(defn stream-chat
-  "Stream chat text from an agent. Calls the given function everytime a chunk of
-   non function output is received. The function will be called with events as they become available.
+(defn start!
+  "Start the agent with the given id, log, and model. If an id is omitted, a random
+   uuid will be used. See dobby.agent.schema to understand the difference between an agent
+   and started-agent. At a high level, agent types act as a prototype for started-agents. Most
+   dobby backed programs will interact with a started-agent."
+  ([agent log model]
+   (agent/start! agent log model))
+  ([agent id log model]
+   (agent/start! agent id log model)))
 
+(defn stop!
+  "Stop a started agent. This will stop the agent's model and close the response channel
+   so no further responses can be streamed"
+  [started-agent]
+  (agent/stop! started-agent))
+
+(defmacro defagent
+  "Defines an agent constructor. Functions defined via defunction can
+   be passed to the agents attribute map. The docstring for the agent will be used as the
+   initial-prompt for the model.
+
+   An agent is started by calling the constructor function following the same semantics as
+   dobby.core/start! - the only difference being that the agent argument is omitted.
+   
+   ```clojure
+   (defagent weather-assistant
+     \"You are a helpful weather bot that delivers useful weather information\"
+     {:functions [get-current-weather]}
+     [agent message]
+     (println message))
+   
+   (weather-assistant (random-uuid) (create-log) (create-model {:model \"gpt-3.5-turbo\"}))
+   ```"
+  [& args]
+  `(dobby.agent/defagent ~@args))
+
+(defmacro defunction
+  "Defines a function for use with a model. Very similar to a regular Clojure function
+   except it forces a schema definition via the malli library. This schema is used to communicate
+   the function signature to the model by converting it to json schema. The docstring is used as the json schema description.
+   The function arguments will always be [started-agent arguments]
+   
+   ```clojure
+   (defunction get-current-weather
+     \"Get the current weather in a given location\"
+     [:map {:closed true}
+       [:location {:description \"The city and state, e.g. San Francisco, CA\"} :string]
+       [:unit {:optional true} [:enum {:json-schema/type \"string\"} \"celsius\" \"fahrenheit\"]]]
+     [_ {:keys [location unit]}]
+     (make-weather-api-call location unit))
+   ```"
+  [& args]
+  `(dobby.agent/defunction ~@args))
+
+(defmacro stream
+  "Opens a stream to the given agents response stream. Responses are received as they become
+   available. It is important to know that this stream will only receive events for text responses
+   from the agent. Function calls are handled automatically.
+   
    Events are maps of the form {:type <type> :content <content>}
 
    Types are as follows:
@@ -70,26 +106,12 @@
    - :text - Represents that text is available, :content will be a string containing the portion of the response
    - :end - Represnts that the response has ended. :content will be nil
 
-   Useful for realtime responses"
-  [agent fn-1]
-  (agent/stream-chat agent fn-1))
+   Streaming stops as soon as the agent is stopped.  
 
-(defn stop-agent!
-  "Stop an agent. Messages will no longer be handled, but the agent can be restarted"
-  [agent]
-  (agent/stop-agent! agent))
-
-(defmacro defagent
-  "Create an agent. This macro is structed just like clojure.core/defn. The differences
-   are that the doc string will be used as the initial prompt and if an attrs-map is given,
-   it will be used to provide additional parameters to GPT. Passing a function defined by defunction will ensure that the malli schema is used to generate
-   the appropriate schema for GPT"
+   ```clojure
+   (stream started
+     [event]
+     (println event))
+   ```"
   [& args]
-  `(dobby.impl.agent/defagent ~@args))
-
-(defmacro defunction
-  "Define a function that can be invoked by an agent. Any function with a json-schema
-   structure defined as meta data can be used by an agent. These functions should have an
-   argument signature of [agent args]"
-  [& args]
-  `(dobby.impl.agent/defunction ~@args))
+  `(dobby.agent/stream ~@args))

@@ -1,5 +1,9 @@
 (ns user
-  (:require [dobby.core :refer [defagent defunction dispatch stream-chat start-agent! send-text context stop-agent! create-log close!]]))
+  (:require [clojure.tools.namespace.repl :as repl]
+            [dobby.core :as agent :refer [defagent defunction stream]]
+            [juxt.clip.repl :refer [start stop reset set-init! system]]))
+
+(repl/set-refresh-dirs "src" "dev")
 
 (defunction get-current-weather
   "Get the current weather in a given location"
@@ -13,29 +17,38 @@
   "You are a helpful weather bot that delivers useful weather information"
   {:functions [get-current-weather]}
   [agent message]
-  (dispatch agent message))
+  (println message))
 
-(def log (create-log))
+(defn start-stream!
+  [started-agent]
+  (stream started-agent
+    [event]
+    (println event)))
 
-(defn handle-output
-  [event]
-  (let [{:keys [type content]} event]
-    (case type
-      :begin  (println "Beginning response")
-      :end    (println "Response finished")
-      (print content))))
+(def system-config
+  {:components
+   {:log   {:start `(agent/create-log)}
+    :model {:start `(agent/create-model {:model "gpt-3.5-turbo"})}
+    :agent {:start `(start-stream!
+                     (weather-assistant (clip/ref :log) (clip/ref :model)))
+            :stop  'agent/stop!}}})
 
-#_(def started-weather-assistant 
-    (let [started (start-agent! weather-assistant log)] 
-      (stream-chat weather-assistant handle-output)
-      (send-text weather-assistant "What is the weather like in Boston?")
-      started))
+(set-init! (constantly system-config))
 
-#_(send-text weather-assistant "What clothing should I wear?")
+(defn get-context []
+  (let [agent (:agent system)]
+    (agent/get-context agent)))
 
-#_(context started-weather-assistant)
+(defn send-message!
+  [message]
+  (let [agent (:agent system)]
+    (agent/send-message! agent message)))
 
-#_(stop-agent! started-weather-assistant)
+#_(reset)
 
-#_(close! started-weather-assistant)
+#_(stop)
+
+#_(send-message! {:role "user" :content "What is the weather like in Boston?"})
+
+#_(get-context)
 
