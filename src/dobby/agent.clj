@@ -90,7 +90,7 @@
 (defn start!
   "@todo - model needs to have functions added to params before starting"
   ([agent id log model]
-   (let [response-ch        (async/chan 5)
+   (let [response-ch        (async/chan)
          get-context        (partial log/get-context log id)
          started-model      (-> model
                                 (model/initialize agent)
