@@ -3,7 +3,6 @@
             [clojure.core.async :as async]
             [clojure.java.io :as io]
             [dobby.model.impl :refer [Model]]
-            [medley.core :as med]
             [org.httpkit.client :as http]))
 
 (def *default-credentials (delay {:api-key      (System/getenv "OPEN_AI_KEY")
@@ -152,10 +151,11 @@
 
 (defn initialize*
   [model agent]
-  (let [functions (vals (:functions agent))]
+  (if-some [functions (vals (:functions agent))]
     (->> (map meta functions)
          (map :json-schema)
-         (assoc-in model [:params :functions]))))
+         (assoc-in model [:params :functions]))
+    model))
 
 (defrecord Gpt [params input output close-ch]
   Model
