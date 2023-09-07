@@ -119,7 +119,10 @@
                     (recur (rest chunks) (apply-delta message delta) nil (or begun? content?)))
            (do
              (cond
-               (some? message) (async/put! output (parse-message message))
+               (some? message) (try
+                                 (async/put! output (parse-message message))
+                                 (catch Exception e
+                                   (async/put! output {:error {:message (.getMessage e) :response message}})))
                (some? error)   (async/put! output (parse-error error)))
              (when begun?
                (handler {:type :end :content nil})))))))))
