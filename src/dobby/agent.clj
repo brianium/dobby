@@ -14,17 +14,26 @@
    :initial-prompt initial-prompt
    :functions      functions})
 
-(defn- init-context!
-  "Initialize the context for an agent and return the agent
+(defn- init-log!
+  "Initialize the log with the agent's initial prompt"
+  [agent]
+  (let [{:keys [initial-prompt id]} agent]
+    (update agent :log log/append! id [{:role "system" :content initial-prompt}])))
+
+(defn- initialize!
+  "Initialize the agent with an ID and a log.
+   
+   Note: User provided agent initialization (i.e the body of the agent macro) will only be applied if there
+   is not an existing context log for the agent.
    
    @todo - Currently the log is initialized with a value that is only meaningful to OpenAI's API. This could
    be abstracted to the model perhaps so a model implementation is in charge of converting some intermediary format
    to something sensible to itself"
-  [agent id log]
-  (let [{:keys [initial-prompt]} agent]
-    (when-not (log/exists? log id)
-      (log/append! log id [{:role "system" :content initial-prompt}]))
-    agent))
+  [agent]
+  (let [{:keys [id log]} agent]
+    (cond-> agent
+      (log/exists? log id) (init-log!)
+      :always              (update :model model/initialize agent))))
 
 (defn- is-error?
   "Check if the given message is an error"
@@ -32,6 +41,7 @@
   (contains? message :error))
 
 (defn- is-function?
+  "Check if the mesage from the model represents a function call"
   [agent message]
   (let [{:keys [functions]} agent]
     (contains? functions (get-in message [:function_call :name]))))
@@ -87,24 +97,27 @@
         (recur)))
     started-agent))
 
-(defn start!
-  "@todo - model needs to have functions added to params before starting"
-  ([agent id log model]
-   (let [response-ch        (async/chan)
-         get-context        (partial log/get-context log id)
-         started-model      (-> model
-                                (model/initialize agent)
-                                (model/start! get-context #(async/put! response-ch %)))]
-     (-> (init-context! agent id log)
-         (assoc :id id :log log :model started-model :response-ch response-ch)
-         (listen!))))
-  ([agent log model]
-   (start! agent (random-uuid) log model)))
-
 (defn get-context
   [started-agent]
   (let [{:keys [id log]} started-agent]
     (log/get-context log id)))
+
+(defn- start-model!
+  [agent]
+  (let [response-ch (async/chan)]
+    (-> agent
+        (assoc :response-ch response-ch)
+        (update :model model/start! (partial get-context agent) #(async/put! response-ch %)))))
+
+(defn start!
+  "Initialize agents"
+  ([agent id log model]
+   (-> (assoc agent :id id :log log :model model)
+       (initialize!)
+       (start-model!)
+       (listen!)))
+  ([agent log model]
+   (start! agent (random-uuid) log model)))
 
 (defn stop!
   [started-agent]
