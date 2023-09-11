@@ -1,7 +1,8 @@
 (ns dobby.agent
-  (:require [cheshire.core :as json]
+  (:require [camel-snake-kebab.core :as csk]
+            [cheshire.core :as json]
             [clojure.core.async :as async]
-            [camel-snake-kebab.core :as csk]
+            [clojure.tools.logging :refer [errorf]]
             [dobby.log :as log]
             [dobby.model :as model]
             [malli.json-schema :as json-schema]
@@ -9,8 +10,8 @@
 
 (defn define-agent
   "Defines the template from which a started agent is created"
-  [initial-prompt on-message functions]
-  {:on-message     on-message
+  [initial-prompt init functions]
+  {:init           init
    :initial-prompt initial-prompt
    :functions      functions})
 
@@ -23,17 +24,18 @@
 (defn- initialize!
   "Initialize the agent with an ID and a log.
    
-   Note: User provided agent initialization (i.e the body of the agent macro) will only be applied if there
-   is not an existing context log for the agent.
-   
+   The log will only be initilized if the given log implementation
+   returns false for (log/exists? log id)
+
    @todo - Currently the log is initialized with a value that is only meaningful to OpenAI's API. This could
    be abstracted to the model perhaps so a model implementation is in charge of converting some intermediary format
    to something sensible to itself"
   [agent]
-  (let [{:keys [id log]} agent]
+  (let [{:keys [id log init]} agent]
     (cond-> agent
-      (log/exists? log id) (init-log!)
-      :always              (update :model model/initialize agent))))
+      (not (log/exists? log id)) (init-log!)
+      :always                    (-> (init) 
+                                     (update :model model/initialize agent)))))
 
 (defn- is-error?
   "Check if the given message is an error"
@@ -46,13 +48,18 @@
   (let [{:keys [functions]} agent]
     (contains? functions (get-in message [:function_call :name]))))
 
-(defn- append!
+(defn append!
   "Append a message to the agent's context log."
   [started-agent message]
   (let [{:keys [log id]} started-agent
         msg (m/update-existing-in message [:function_call :arguments] json/encode)] 
     (log/append! log id [msg])
     msg))
+
+(defn context-length
+  [started-agent]
+  (let [{:keys [id log]} started-agent]
+    (log/count log id)))
 
 (defn send-message!
   [started-agent message]
@@ -82,18 +89,18 @@
    to the message handler. Will write all responses from the model to the context log as they are
    received."
   [started-agent]
-  (let [{:keys [on-message] {:keys [output]} :model} started-agent]
+  (let [{:keys [id] {:keys [output]} :model} started-agent]
     (async/go-loop []
       (when-some [message (async/<! output)]
         (cond
           (is-error? message)
-          (on-message started-agent message)
+          (errorf "Agent ID: %s: Error: %s" id message) ;;; For now just log errors until an opportunity to use them arises
           
           (is-function? started-agent message)
           (invoke! started-agent (append! started-agent message))
           
           :else
-          (on-message started-agent (append! started-agent message)))
+          (append! started-agent message))
         (recur)))
     started-agent))
 

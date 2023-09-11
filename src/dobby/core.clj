@@ -3,6 +3,24 @@
             [dobby.log :as log]
             [dobby.model :as model]))
 
+(defn append!
+  "Appends a message to the agent's context log. This will not interact with the
+   model, but instead will be included the next time the model requires context.
+   
+   Useful for adding log entries to affect model responses without generating an immediate
+   response.
+   
+   Returns the agent"
+  [agent & messages]
+  (doseq [msg messages]
+    (agent/append! agent msg))
+  agent)
+
+(defn context-length
+  "Get the number of messages currently contained in the agent's context log"
+  [agent]
+  (agent/context-length agent))
+
 (defn create-log
   "Returns a new log backed by an atom. For more complex scenarios, create
    an implementation of the dobby.impl.log/Log protocol"

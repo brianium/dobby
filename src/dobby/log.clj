@@ -1,6 +1,7 @@
 (ns dobby.log
   (:require [dobby.log.impl :as impl]
-            [dobby.log.atom :as atom]))
+            [dobby.log.atom :as atom])
+  (:refer-clojure :exclude [count]))
 
 (defn append!
   [log id messages]
@@ -14,6 +15,10 @@
 (defn exists?
   [log id]
   (impl/exists? log id))
+
+(defn count
+  [log id]
+  (impl/count log id))
 
 (defn create-log []
   (atom/create-log))

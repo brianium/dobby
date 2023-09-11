@@ -5,8 +5,8 @@
             [malli.util :as mu]))
 
 (def Agent
-  [:map 
-   [:on-message fn?]
+  [:map
+   [:init fn?]
    [:functions [:map-of :string fn?]]
    [:initial-prompt :string]])
 

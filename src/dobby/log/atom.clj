@@ -11,7 +11,11 @@
    (get @*atom id []))
   (exists?
    [_ id]
-   (contains? @*atom id)))
+   (contains? @*atom id))
+  (count
+   [_ id]
+   (let [context (get @*atom id [])]
+     (clojure.core/count context))))
 
 (defn create-log []
   (let [*data (atom {})]

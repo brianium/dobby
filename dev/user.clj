@@ -16,8 +16,11 @@
 (defagent weather-assistant
   "You are a helpful weather bot that delivers useful weather information"
   {:functions [get-current-weather]}
-  [agent message]
-  (println message))
+  [agent]
+  (println (agent/context-length agent))
+  (agent/append!
+   agent
+   {:role "user" :content "I want you to preface every response with the exclamation 'Hot Dog!'"}))
 
 (defn start!
   ([id log model]

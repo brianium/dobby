@@ -5,9 +5,9 @@
   "Transforms a defunction into a defn"
   [{:keys [node]}]
   (let [[name _ _ binding-vec & body] (rest (:children node))
-        [sym val]                        (:children binding-vec)]
-    (when-not (and sym val)
-      (throw (ex-info "No sym and val provided" {})))
+        [agent]                       (:children binding-vec)]
+    (when-not agent
+      (throw (ex-info "No agent binding provided" {})))
     (let [new-node (api/list-node
                     (list
                      (api/token-node 'def)
@@ -21,7 +21,7 @@
                          (api/list-node
                           (list*
                            (api/token-node 'fn)
-                           (api/vector-node [sym val])
+                           (api/vector-node [agent])
                            body))))
                        (api/list-node
                         (list
@@ -29,7 +29,7 @@
                          (api/list-node
                           (list*
                            (api/token-node 'fn)
-                           (api/vector-node [sym val])
+                           (api/vector-node [agent])
                            body))))))))] 
       {:node new-node})))
 
