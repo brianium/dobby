@@ -100,32 +100,34 @@
   [request output handler]
   (http/request
    request
-   (fn [{:keys [body]}]
-     (loop [chunks      (parse-body body)
-            message     nil
-            error       nil
-            begun?      false]
-       (let [[type data] (first chunks)
-             choice      (some-> data :choices first)
-             content?    (get-in choice [:delta :content])]
-         (when (and (not begun?) content?)
-           (handler {:type :begin :content nil}))
-         (case type
-           :done  (recur nil message error begun?)
-           :error (recur (rest chunks) nil (str error data) begun?)
-           :data  (let [delta (:delta choice)]
-                    (when-some [content (:content delta)]
-                      (handler {:type :text :content content}))
-                    (recur (rest chunks) (apply-delta message delta) nil (or begun? content?)))
-           (do
-             (cond
-               (some? message) (try
-                                 (async/put! output (parse-message message))
-                                 (catch Exception e
-                                   (async/put! output {:error {:message (.getMessage e) :response message}})))
-               (some? error)   (async/put! output (parse-error error)))
-             (when begun?
-               (handler {:type :end :content nil})))))))))
+   (fn [{:keys [body error]}]
+     (if error
+       (async/put! output {:error {:message (.getMessage error)} :response nil})
+       (loop [chunks      (parse-body body)
+              message     nil
+              error       nil
+              begun?      false]
+         (let [[type data] (first chunks)
+               choice      (some-> data :choices first)
+               content?    (get-in choice [:delta :content])]
+           (when (and (not begun?) content?)
+             (handler {:type :begin :content nil}))
+           (case type
+             :done  (recur nil message error begun?)
+             :error (recur (rest chunks) nil (str error data) begun?)
+             :data  (let [delta (:delta choice)]
+                      (when-some [content (:content delta)]
+                        (handler {:type :text :content content}))
+                      (recur (rest chunks) (apply-delta message delta) nil (or begun? content?)))
+             (do
+               (cond
+                 (some? message) (try
+                                   (async/put! output (parse-message message))
+                                   (catch Exception e
+                                     (async/put! output {:error {:message (.getMessage e) :response message}})))
+                 (some? error)   (async/put! output (parse-error error)))
+               (when begun?
+                 (handler {:type :end :content nil}))))))))))
 
 (defn start*
   "Start listening for messages on the model's input channel. When a message is received,
