@@ -6,9 +6,9 @@
 
 (def Agent
   [:map
-   [:init fn?]
+   [:name :string]
    [:functions [:map-of :string fn?]]
-   [:initial-prompt :string]])
+   [:prompt :string]])
 
 (def StartedAgent
   [:and

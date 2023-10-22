@@ -2,24 +2,18 @@
   (:require [camel-snake-kebab.core :as csk]
             [cheshire.core :as json]
             [clojure.core.async :as async]
+            [clojure.java.io :as io]
             [clojure.tools.logging :refer [errorf]]
             [dobby.log :as log]
             [dobby.model :as model]
             [malli.json-schema :as json-schema]
             [medley.core :as m]))
 
-(defn define-agent
-  "Defines the template from which a started agent is created"
-  [initial-prompt init functions]
-  {:init           init
-   :initial-prompt initial-prompt
-   :functions      functions})
-
 (defn- init-log!
-  "Initialize the log with the agent's initial prompt"
+  "Initialize the log with the agent's prompt"
   [agent]
-  (let [{:keys [initial-prompt id]} agent]
-    (update agent :log log/append! id [{:role "system" :content initial-prompt}])))
+  (let [{:keys [prompt id]} agent]
+    (update agent :log log/append! id [{:role "system" :content prompt}])))
 
 (defn- initialize!
   "Initialize the agent with an ID and a log.
@@ -31,11 +25,10 @@
    be abstracted to the model perhaps so a model implementation is in charge of converting some intermediary format
    to something sensible to itself"
   [agent]
-  (let [{:keys [id log init]} agent]
+  (let [{:keys [id log]} agent]
     (cond-> agent
       (not (log/exists? log id)) (init-log!)
-      :always                    (-> (init) 
-                                     (update :model model/initialize agent)))))
+      :always                    (update :model model/initialize agent))))
 
 (defn- is-error?
   "Check if the given message is an error"
@@ -140,31 +133,28 @@
     (with-meta fn-2
       {:json-schema json})))
 
-(defmacro defunction
-  [name description schema args & body]
-  (let [schema-name (str (csk/->snake_case name))]
-    `(def ~name
-       (define-function ~schema-name ~description ~schema (fn ~args ~@body)))))
-
 (defn create-function-map
   [functions]
   (into {} (map (juxt #(get-in (meta %) [:json-schema :name]) identity) functions)))
 
 (defmacro defagent
-  [name prompt & rest]
-  (let [attr-map?  (map? (first rest))
-        attr-map   (if attr-map? (first rest) nil)
-        args       (vec (if attr-map? (second rest) (first rest)))
-        body       (if attr-map? (drop 2 rest) (drop 1 rest))]
-    `(defn ~name
+  [agent-name & args]
+  (let [kwargs    (apply hash-map (flatten (partition 2 args)))
+        start-fn  (symbol (str (name agent-name) ">"))
+        functions (->> args
+                       (drop (* 2 (count kwargs)))
+                       (map (fn [[fn-name description schema args body]]
+                              (define-function (str (csk/->snake_case fn-name)) description schema `(fn ~args ~body))))
+                       (create-function-map))
+        agent     (->  (merge kwargs {:name      (name agent-name)
+                                      :functions functions})
+                       (update :prompt io/resource)
+                       (update :prompt slurp))]
+    `(defn ~start-fn
        ([id# log# model#]
-        (start!
-         (define-agent ~prompt (fn ~args ~@body)
-           (create-function-map
-            (get ~attr-map :functions [])))
-         id# log# model#))
+        (start! ~agent id# log# model#))
        ([log# model#]
-        (~name (random-uuid) log# model#)))))
+        (~start-fn (random-uuid) log# model#)))))
 
 (defmacro stream
   [started-agent bindings & body]

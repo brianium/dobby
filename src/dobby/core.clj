@@ -33,20 +33,6 @@
   [params]
   (model/create-model params))
 
-(defn define-agent
-  "Defines a prototype for starting agents with. This function is the backing function
-   for the defagent macro. It is provided as an alternative to defagent, and is useful
-   for scenarios where you want to create an agent without defining a new symbol."
-  [initial-prompt on-message functions]
-  (agent/define-agent initial-prompt on-message functions))
-
-(defn define-function
-  "This function is the backing function for the defunction macro. It is provided as an
-   alternative to defunction, and is useful for scenarios where you want to create a function
-   without defining a new symbol."
-  [schema-name description schema fn-2]
-  (agent/define-function schema-name description schema fn-2))
-
 (defn get-context
   "Return the current context of the agent"
   [started-agent]
@@ -75,42 +61,31 @@
   (agent/stop! started-agent))
 
 (defmacro defagent
-  "Defines an agent constructor. Functions defined via defunction can
-   be passed to the agents attribute map. The docstring for the agent will be used as the
-   initial-prompt for the model.
+  "Defines an agent.
 
    An agent is started by calling the constructor function following the same semantics as
-   dobby.core/start! - the only difference being that the agent argument is omitted.
+   dobby.core/start! - the only difference being that the agent argument is omitted. A start
+   function will be generated in the namespace of the agent - it will be the agent name with a > suffix.
+
+   Functions are defined much like record protocol implementations. The difference being that after
+   an agent's function name and docstring, a malli map schema is expected.
    
    ```clojure
-   (defagent weather-assistant
-     \"You are a helpful weather bot that delivers useful weather information\"
-     {:functions [get-current-weather]}
-     [agent message]
-     (println message))
+   (defagent Roker
+     :prompt \"agents/Roker.txt\"
+  
+     (get-current-weather
+       \"Get the current weather in a given location\"
+       [:map
+         [:location {:description \"The city and state, e.g. San Francisco, CA\"} :string]
+         [:unit {:optional true} [:enum {:json-schema/type \"string\"} \"celsius\" \"fahrenheit\"]]]
+       [_ {:keys [location unit]}]
+       {:temperature 22 :unit \"celsius\" :description \"Sunny\"}))
    
-   (weather-assistant (random-uuid) (create-log) (create-model {:model \"gpt-3.5-turbo\"}))
+   (Roker> (random-uuid) (create-log) (create-model {:model \"gpt-3.5-turbo\"}))
    ```"
   [& args]
   `(dobby.agent/defagent ~@args))
-
-(defmacro defunction
-  "Defines a function for use with a model. Very similar to a regular Clojure function
-   except it forces a schema definition via the malli library. This schema is used to communicate
-   the function signature to the model by converting it to json schema. The docstring is used as the json schema description.
-   The function arguments will always be [started-agent arguments]
-   
-   ```clojure
-   (defunction get-current-weather
-     \"Get the current weather in a given location\"
-     [:map {:closed true}
-       [:location {:description \"The city and state, e.g. San Francisco, CA\"} :string]
-       [:unit {:optional true} [:enum {:json-schema/type \"string\"} \"celsius\" \"fahrenheit\"]]]
-     [_ {:keys [location unit]}]
-     (make-weather-api-call location unit))
-   ```"
-  [& args]
-  `(dobby.agent/defunction ~@args))
 
 (defmacro stream
   "Opens a stream to the given agents response stream. Responses are received as they become
