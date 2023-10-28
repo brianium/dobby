@@ -1,0 +1,125 @@
+(ns dobby.impl.gpt
+  (:require [cheshire.core :as json] 
+            [clojure.core.async :as async]
+            [clojure.java.io :as io]
+            [org.httpkit.client :as http]))
+
+(def *default-credentials (delay {:api-key      (System/getenv "OPEN_AI_KEY")
+                                  :organization (System/getenv "OPEN_AI_ORGANIZATION")}))
+
+(defn get-credentials
+  "Supports getting credentials from the given params or from the environment.
+   
+   If credentials are not found in the params, then the environment is checked for the values
+   OPEN_AI_KEY and OPEN_AI_ORGANIZATION"
+  [params]
+  (if (every? #(string? (get params %)) [:api-key :organization])
+    (select-keys params [:api-key :organization])
+    @*default-credentials))
+
+(defn create-request
+  "Create a request object that can be used to stream responses from the OpenAI API"
+  [credentials data]
+  (let [{:keys [api-key organization]} credentials]
+    {:headers {"Authorization"       (str "Bearer " api-key)
+               "Content-Type"        "application/json"
+               "OpenAI-Organization" organization}
+     :body    (json/encode (merge data {:stream true}))
+     :url     "https://api.openai.com/v1/chat/completions"
+     :method  :post
+     :as      :stream}))
+
+(defn parse-line
+  "Parse a line of the response body, returning a tuple containing a result type
+   and the parsed data. The result type is one of :done, :data, or :error. The data
+   value will either be nil for :done, a map for :data, or the raw line for :error"
+  [line]
+  (cond
+    (= line "data: [DONE]")
+    [:done nil]
+
+    (.startsWith line "data: ")
+    (let [data (-> line
+                   (subs 6) ;; trim "data: " prefix
+                   (json/decode keyword))]
+      [:data data])
+
+    :else
+    [:error line]))
+
+(defn parse-body
+  "Parse the response body line by line, returning a lazy sequence of parsed lines
+   as results containing a type and associated data (see parse-line)"
+  [bytes]
+  (let [rdr (io/reader bytes :encoding "UTF-8")]
+    (->> (line-seq rdr)
+         (filter not-empty)
+         (map parse-line))))
+
+(defmulti apply-delta
+  "Determines how to apply a delta to a message that will be sent to the model's output
+   channel. Should handle content messages as well as function call messages"
+  (fn [_ delta]
+    (-> delta
+        keys
+        first)))
+
+(defmethod apply-delta :content [message delta]
+  (update message :content str (:content delta)))
+
+(defmethod apply-delta :function_call [message delta]
+  (update-in message [:function_call :arguments] str (get-in delta [:function_call :arguments])))
+
+(defmethod apply-delta :default [message delta]
+  (merge message delta))
+
+(defn parse-message
+  "If a message has function call arguments, this will convert them
+   into a Clojure map - otherwise the message is returned as is"
+  [message]
+  (let [decode #(json/decode % keyword)]
+    (if (:function_call message)
+      (update-in message [:function_call :arguments] decode)
+      message)))
+
+(defn parse-error
+  "Parse an error into a Clojure map"
+  [error-string]
+  (json/decode error-string keyword));
+
+(defn stream
+  "Returns a core.async channel with response information from gpt"
+  [params]
+  (let [credentials  (get-credentials params)
+        data         (dissoc params :api-key :organization)
+        request      (create-request credentials data)
+        output       (async/chan)
+        push-message #(async/put! output %)]
+    (http/request
+     request
+     (fn [{:keys [body error]}]
+       (if error
+         (push-message [:response/error error])
+         (loop [chunks  (parse-body body)
+                message nil
+                error   nil
+                begun?  false]
+           (let [[type data] (first chunks)
+                 choice      (some-> data :choices first)
+                 content?    (get-in choice [:delta :content])]
+             (when (and (not begun?) content?)
+               (push-message [:response/started nil]))
+             (case type
+               :done  (recur nil message error begun?)
+               :error (recur (rest chunks) nil (str error data) begun?)
+               :data  (let [delta (:delta choice)]
+                        (when-some [content (:content delta)]
+                          (push-message [:response/chunk content]))
+                        (recur (rest chunks) (apply-delta message delta) nil (or begun? content?)))
+               (cond
+                 (some? message) (try
+                                   (push-message [:response/completed (parse-message message)])
+                                   (catch Exception e
+                                     (push-message [:response/error e])))
+                 (some? error)   (push-message [:response/error (ex-info "Error streaming response" (parse-error error))]))))))))
+    output))
