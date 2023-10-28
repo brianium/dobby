@@ -32,7 +32,9 @@
 
 #_(put! c {:role "user" :content "Hello there!"})
 
-(map :content c)
+#_(map identity c)
+
+#_(update c 1 assoc :content "zoop")
 
 #_@(:log c)
 
