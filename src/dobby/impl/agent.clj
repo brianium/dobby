@@ -20,18 +20,7 @@
   
   clojure.lang.Seqable
   (seq [_]
-    (seq @log))
-  
-  clojure.lang.Associative
-  (assoc [self key val]
-    (reset! log (assoc @log key val))
-    self)
-  (entryAt [_ key]
-    (find @log key)) 
-  (containsKey [_ key]
-    (contains? @log key))
-  (valAt [_ key]
-    (get @log key)))
+    (seq @log)))
 
 (defn create-agent
   "Creates an agent. An agent is a bidirectional channel that can be used to send and receive messages
