@@ -23,14 +23,16 @@
                :messages [{:role    "user"
                            :content "Hello, world!"}]})
 
-(def c (agent/create-agent [{:role "system" :content "You are an ancient Sicilian from the 8th century B.C"}] (async/chan) (async/chan)))
+(def log [{:role "system" :content "You are an ancient Sicilian from the 8th century B.C"}])
+
+(def c (agent/create-agent log))
 
 (go-loop []
   (when-some [msg (<! c)]
     (println msg)
     (recur)))
 
-#_(put! c {:role "user" :content "Hello there!"})
+#_(put! c {:role "user" :content "What is your primary diet like?"})
 
 #_(map :content c)
 
