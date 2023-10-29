@@ -35,6 +35,13 @@
 
    ```clojure
    (agent (clojure.java.io/resource \"prompt.txt\"))
+   ```
+   
+   All model parameters can be passed to gpt as keyword arguments (or as a map):
+   
+   ```clojure
+   (agent \"You are a helpful assistant\" :model \"gpt-3.5-turbo\")
+   (agent \"You are a helpful assistant\" {:model \"gpt-3.5-turbo\"})
    ```"
   [x & {:as opts}]
   (agent/create x opts))
