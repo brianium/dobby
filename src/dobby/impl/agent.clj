@@ -63,3 +63,28 @@
     
      ;;; Return the agent
     agent))
+
+(defmulti create
+  (fn [x & args]
+    (type x)))
+
+(defmethod create java.lang.String
+  [str & {:as opts}]
+  (create-agent [{:role "system" :content str}] opts))
+
+(defmethod create clojure.lang.PersistentVector
+  [m & {:as opts}]
+  (create-agent m opts))
+
+(defmethod create clojure.lang.PersistentArrayMap
+  [m & {:as opts}]
+  (create [m] opts))
+
+(defmethod create java.net.URL
+  [u & {:as opts}]
+  (create (slurp u) opts))
+
+(defmethod create :default
+  [x {:as opts}]
+  (let [t (type x)]
+    (throw (ex-info (format "Cannot create agent from %s" t) {:args [x] :opts opts}))))
