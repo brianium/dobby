@@ -22,6 +22,11 @@
   (seq [_]
     (seq @log)))
 
+(defn- put-and-close!
+  [val ch]
+  (async/put! ch val)
+  (async/close! ch))
+
 (defn create-agent
   "Creates an agent. An agent is a bidirectional channel that can be used to send and receive messages
    from gpt. It functions as a core.async channel that can be read from and written to. It maintains a stateful
@@ -43,13 +48,10 @@
      ;;; Handles input sent to agent - responses are piped to the mult'ed output channel
     (go-loop []
       (when-some [msg (<! input)]
-        (let [log    (swap! *log conj msg)
-              stream (gpt/stream (merge opts {:model    model
-                                              :messages log}))]
-          (async/pipeline-async 1 output (fn [val ch]
-                                           (async/put! ch val)
-                                           (async/close! ch)) stream)
-          (recur))))
+        (let [gpt-ch (gpt/stream (merge opts {:model    model
+                                              :messages (swap! *log conj msg)}))]
+          (async/pipeline-async 1 output put-and-close! gpt-ch))
+        (recur)))
     
      ;;; Reads exclusively from the write-stream in order to update the log with response data
     (go-loop []
